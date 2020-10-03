@@ -1,0 +1,148 @@
+<!doctype html>
+
+<html lang="en">
+
+<head>
+    <meta charset="utf-8">
+
+    <title>UHST ping example</title>
+    <meta name="description"
+        content="Example showing how to use the User Hosted Secure Transmission framework to send simple ping messages.">
+    <meta name="author" content="Stefan Dimitrov">
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css"
+        integrity="sha384-JcKb8q3iqJ61gNV9KGb8thSsNjpSL0n8PARn9HuZOnIxN0hoP+VmmDGMN5t9UJ0Z" crossorigin="anonymous">
+</head>
+
+<body>
+    <main role="main">
+
+        <!-- Main jumbotron for a primary marketing message or call to action -->
+        <div class="jumbotron">
+            <div class="container">
+                <h1 class="display-3">Ping</h1>
+                <p>The UHST implementation of ping measures the round-trip time for messages sent from the originating
+                    browser
+                    (client)
+                    to a destination browser (host) that are echoed back to the source.
+                    It shows how to create a basic UHST host and client, and confirm the establishing of network
+                    connection between
+                    them.</p>
+            </div>
+        </div>
+
+        <div class="container">
+            <!-- Example row of columns -->
+            <div class="row">
+                <div class="col-md-6">
+                    <h2>Host Info</h2>
+                    <p>HostId: <b id="hostId"></b></p>
+                    <p>Diagnostic Log:</p>
+                    <pre id="hostStatus"></pre>
+                </div>
+                <div class="col-md-6">
+                    <h2>Client</h2>
+                    <form onsubmit="return pingHost(event)">
+                    <p>Enter remote HostId: <input id="pingHostId" type="text" placeholder="000-000" pattern="[0-9]{3}-[0-9]{3}"
+                            maxlength="7" minlength="7" autofocus> <input type="submit" value="Ping"></p></form>
+                    <p>Result:</p>
+                    <pre id="clientStatus"></pre>
+                </div>
+            </div>
+
+            <hr>
+
+        </div> <!-- /container -->
+
+    </main>
+    <script crossorigin src="https://unpkg.com/uhst/uhst.min.js"></script>
+
+    <script>
+        var hostStatusEl = document.getElementById("hostStatus");
+        var clientStatusEl = document.getElementById("clientStatus");
+        var hostIdEl = document.getElementById("hostId");
+        var pingHostIdEl = document.getElementById("pingHostId");
+    </script>
+    <script>
+        const typeSizes = {
+            "undefined": () => 0,
+            "boolean": () => 4,
+            "number": () => 8,
+            "string": item => 2 * item.length,
+            "object": item => !item ? 0 : Object
+                .keys(item)
+                .reduce((total, key) => sizeOf(key) + sizeOf(item[key]) + total, 0)
+        };
+        const sizeOf = value => typeSizes[typeof value](value);
+    </script>
+
+    <script>
+        var uhstApi = new uhst.UHST({ debug: true });
+    </script>
+
+    <script>
+        // Host Script
+        var requestedId = "" + Math.floor((Math.random() * 899) + 100) + "-" + Math.floor((Math.random() * 899) + 100);
+
+        var host = uhstApi.host(requestedId);
+        hostStatusEl.innerText += "Initializing Host...\n";
+        host.on("ready", () => {
+            hostStatusEl.innerText += "Ready.\n";
+            hostIdEl.innerText = host.hostId;
+        });
+        host.on("connection", function connection(ws) {
+            hostStatusEl.innerText += "Host received client connection.\n";
+            ws.on("open", function open() {
+                hostStatusEl.innerText += "Host ready to use client connection.\n";
+            });
+            ws.on("diagnostic", function diagnostic(message) {
+                hostStatusEl.innerText += message + "\n";
+            });
+            ws.on("message", function incoming(message) {
+                var message = JSON.parse(message);
+                ws.send(JSON.stringify({ "src": host.hostId, "seq": message.seq, "time": message.time }));
+                hostStatusEl.innerText += "Received ping from " + message.src + ".\n";
+            });
+        });
+    </script>
+
+    <script>
+        // Client Script
+        function pingHost(e) {
+            e.preventDefault();
+            var MAX_PINGS = 4;
+            var hostIdToPing = pingHostIdEl.value;
+            hostStatusEl.innerText += "Client connecting to " + hostIdToPing + "\n";
+            var client = uhstApi.join(hostIdToPing);
+            client.on("error", function(error) {
+                if (error instanceof uhst.InvalidHostId || error instanceof uhst.InvalidClientOrHostId) {
+                    clientStatusEl.innerText += "Cannot resolve " + hostIdToPing + ": Invalid HostId.\n";
+                }
+            });
+            client.on("diagnostic", function diagnostic(message) {
+                hostStatusEl.innerText += message + "\n";
+            });
+            client.on("message", function (message) {
+                var message = JSON.parse(message);
+                var latency = Date.now() - message.time;
+                clientStatusEl.innerText += sizeOf(message) + " bytes from " + message.src + ": seq=" + message.seq + " time=" + latency + " ms\n";
+                if (message.seq+1 == MAX_PINGS) {
+                    // last message, disconnect
+                    client.disconnect();
+                }
+            });
+            client.on("open", function () {
+                hostStatusEl.innerText += "Client connection established.\n";
+                for (var i = 0; i < MAX_PINGS; i++) {
+                    client.send(JSON.stringify({ "src": host.hostId, "seq": i, "time": Date.now() }));
+                }
+            });
+            client.on("close", function() {
+                hostStatusEl.innerText += "Client connection closed.\n";
+                client = undefined;
+            });
+            return false;
+        }
+    </script>
+</body>
+
+</html>
