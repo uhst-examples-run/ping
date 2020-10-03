@@ -9,7 +9,8 @@
     <meta name="description"
         content="Example showing how to use the User Hosted Secure Transmission framework to send simple ping messages.">
     <meta name="author" content="Stefan Dimitrov">
-    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" integrity="sha384-JcKb8q3iqJ61gNV9KGb8thSsNjpSL0n8PARn9HuZOnIxN0hoP+VmmDGMN5t9UJ0Z" crossorigin="anonymous">
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css"
+        integrity="sha384-JcKb8q3iqJ61gNV9KGb8thSsNjpSL0n8PARn9HuZOnIxN0hoP+VmmDGMN5t9UJ0Z" crossorigin="anonymous">
 </head>
 
 <body>
@@ -17,45 +18,49 @@
 
         <!-- Main jumbotron for a primary marketing message or call to action -->
         <div class="jumbotron">
-          <div class="container">
-            <h1 class="display-3">Ping</h1>
-            <p>The UHST implementation of ping measures the round-trip time for messages sent from the originating browser
-                (client)
-                to a destination browser (host) that are echoed back to the source.
-                It shows how to create a basic UHST host and client, and confirm the establishing of network connection between
-                them.</p>
-          </div>
+            <div class="container">
+                <h1 class="display-3">Ping</h1>
+                <p>The UHST implementation of ping measures the round-trip time for messages sent from the originating
+                    browser
+                    (client)
+                    to a destination browser (host) that are echoed back to the source.
+                    It shows how to create a basic UHST host and client, and confirm the establishing of network
+                    connection between
+                    them.</p>
+            </div>
         </div>
-      
+
         <div class="container">
-          <!-- Example row of columns -->
-          <div class="row">
-            <div class="col-md-6">
-              <h2>Host Info</h2>
-              <p>HostId: <b id="hostId"></b></p>
-              <p>Diagnostic Log:</p>
-              <pre id="hostStatus"></pre>
+            <!-- Example row of columns -->
+            <div class="row">
+                <div class="col-md-6">
+                    <h2>Host Info</h2>
+                    <p>HostId: <b id="hostId"></b></p>
+                    <p>Diagnostic Log:</p>
+                    <pre id="hostStatus"></pre>
+                </div>
+                <div class="col-md-6">
+                    <h2>Client</h2>
+                    <form onsubmit="return pingHost(event)">
+                    <p>Enter remote HostId: <input id="pingHostId" type="text" placeholder="000-000" pattern="[0-9]{3}-[0-9]{3}"
+                            maxlength="7" minlength="7" autofocus> <input type="submit" value="Ping"></p></form>
+                    <p>Result:</p>
+                    <pre id="clientStatus"></pre>
+                </div>
             </div>
-            <div class="col-md-6">
-              <h2>Client</h2>
-              <p>Enter remote HostId: <input id="pingHostId" type="text" pattern="[1-9][0-9]{2}-[0-9]{3}" placeholder="000-000" maxlength="7" minlength="7" autofocus> <button id="pingBtn" onclick="pingHost()">Ping</button></p>
-              <p>Result:</p>
-              <pre id="clientStatus"></pre>
-            </div>
-          </div>
-      
-          <hr>
-      
+
+            <hr>
+
         </div> <!-- /container -->
-      
-      </main>
+
+    </main>
     <script crossorigin src="https://unpkg.com/uhst/uhst.min.js"></script>
+
     <script>
         var hostStatusEl = document.getElementById("hostStatus");
         var clientStatusEl = document.getElementById("clientStatus");
         var hostIdEl = document.getElementById("hostId");
         var pingHostIdEl = document.getElementById("pingHostId");
-        var pingBtn = document.getElementById("pingBtn");
     </script>
     <script>
         const typeSizes = {
@@ -102,11 +107,17 @@
 
     <script>
         // Client Script
-        function pingHost() {
+        function pingHost(e) {
+            e.preventDefault();
             var MAX_PINGS = 4;
             var hostIdToPing = pingHostIdEl.value;
             hostStatusEl.innerText += "Client connecting to " + hostIdToPing + "\n";
             var client = uhstApi.join(hostIdToPing);
+            client.on("error", function(error) {
+                if (error instanceof uhst.InvalidHostId || error instanceof uhst.InvalidClientOrHostId) {
+                    clientStatusEl.innerText += "Cannot resolve " + hostIdToPing + ": Invalid HostId.\n";
+                }
+            });
             client.on("diagnostic", function diagnostic(message) {
                 hostStatusEl.innerText += message + "\n";
             });
@@ -114,6 +125,10 @@
                 var message = JSON.parse(message);
                 var latency = Date.now() - message.time;
                 clientStatusEl.innerText += sizeOf(message) + " bytes from " + message.src + ": seq=" + message.seq + " time=" + latency + " ms\n";
+                if (message.seq+1 == MAX_PINGS) {
+                    // last message, disconnect
+                    client.disconnect();
+                }
             });
             client.on("open", function () {
                 hostStatusEl.innerText += "Client connection established.\n";
@@ -121,6 +136,11 @@
                     client.send(JSON.stringify({ "src": host.hostId, "seq": i, "time": Date.now() }));
                 }
             });
+            client.on("close", function() {
+                hostStatusEl.innerText += "Client connection closed.\n";
+                client = undefined;
+            });
+            return false;
         }
     </script>
 </body>
