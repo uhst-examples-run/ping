@@ -43,7 +43,7 @@
                     <h2>Client</h2>
                     <form onsubmit="return pingHost(event)">
                     <p>Enter remote HostId: <input id="pingHostId" type="text" placeholder="0000-0000" pattern="[0-9]{4}-[0-9]{4}"
-                            maxlength="7" minlength="7" autofocus> <input type="submit" value="Ping"></p></form>
+                            maxlength="9" minlength="9" autofocus> <input type="submit" value="Ping"></p></form>
                     <p>Result:</p>
                     <pre id="clientStatus"></pre>
                 </div>
@@ -55,6 +55,7 @@
 
     </main>
     <script crossorigin src="https://unpkg.com/uhst/uhst.min.js"></script>
+    <!-- <script src="../uhst-client-js/dist/uhst.min.js"></script> -->
 
     <script>
         var hostStatusEl = document.getElementById("hostStatus");
@@ -76,7 +77,14 @@
     </script>
 
     <script>
-        var uhstApi = new uhst.UHST({ debug: true });
+        var uhstApi = new uhst.UHST({
+            rtcConfiguration: {
+                iceServers: [{ urls: "stun:stun.l.google.com:19302" }, { urls: "stun:global.stun.twilio.com:3478" }, {
+                    urls: "turn:turn.uhst.io", username: "webrtc",
+                    credential: "webrtc"
+                }]
+            }, debug: true
+        });
     </script>
 
     <script>
@@ -111,7 +119,7 @@
             var hostIdToPing = pingHostIdEl.value;
             hostStatusEl.innerText += "Client connecting to " + hostIdToPing + "\n";
             var client = uhstApi.join(hostIdToPing);
-            client.on("error", function(error) {
+            client.on("error", function (error) {
                 if (error instanceof uhst.InvalidHostId || error instanceof uhst.InvalidClientOrHostId) {
                     clientStatusEl.innerText += "Cannot resolve " + hostIdToPing + ": Invalid HostId.\n";
                 }
@@ -123,7 +131,7 @@
                 var message = JSON.parse(message);
                 var latency = Date.now() - message.time;
                 clientStatusEl.innerText += sizeOf(message) + " bytes from " + message.src + ": seq=" + message.seq + " time=" + latency + " ms\n";
-                if (message.seq+1 == MAX_PINGS) {
+                if (message.seq + 1 == MAX_PINGS) {
                     // last message, disconnect
                     client.disconnect();
                 }
@@ -134,7 +142,7 @@
                     client.send(JSON.stringify({ "src": host.hostId, "seq": i, "time": Date.now() }));
                 }
             });
-            client.on("close", function() {
+            client.on("close", function () {
                 hostStatusEl.innerText += "Client connection closed.\n";
                 client = undefined;
             });
