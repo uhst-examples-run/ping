@@ -42,8 +42,10 @@
                 <div class="col-md-6">
                     <h2>Client</h2>
                     <form onsubmit="return pingHost(event)">
-                    <p>Enter remote HostId: <input id="pingHostId" type="text" placeholder="0000-0000" pattern="[0-9]{4}-[0-9]{4}"
-                            maxlength="9" minlength="9" autofocus> <input type="submit" value="Ping"></p></form>
+                        <p>Enter remote HostId: <input id="pingHostId" type="text" placeholder="0000-0000"
+                                pattern="[0-9]{4}-[0-9]{4}" maxlength="9" minlength="9" autofocus> <input type="submit"
+                                value="Ping"></p>
+                    </form>
                     <p>Result:</p>
                     <pre id="clientStatus"></pre>
                 </div>
@@ -78,12 +80,7 @@
 
     <script>
         var uhstApi = new uhst.UHST({
-            rtcConfiguration: {
-                iceServers: [{ urls: "stun:stun.l.google.com:19302" }, { urls: "stun:global.stun.twilio.com:3478" }, {
-                    urls: "turn:turn.uhst.io", username: "webrtc",
-                    credential: "webrtc"
-                }]
-            }, debug: true
+            debug: true
         });
     </script>
 
@@ -113,12 +110,25 @@
 
     <script>
         // Client Script
+        var MAX_PINGS = 4;
+        var client;
+        var sequence = 0;
+
+        function sendMessage() {
+            if (sequence < MAX_PINGS) {
+                client.send(JSON.stringify({ "src": host.hostId, "seq": sequence, "time": Date.now() })).then(function () {
+                    sequence += 1;
+                    setTimeout(sendMessage);
+                });
+            }
+        }
+
         function pingHost(e) {
             e.preventDefault();
-            var MAX_PINGS = 4;
             var hostIdToPing = pingHostIdEl.value;
+            sequence = 0;
             hostStatusEl.innerText += "Client connecting to " + hostIdToPing + "\n";
-            var client = uhstApi.join(hostIdToPing);
+            client = uhstApi.join(hostIdToPing);
             client.on("error", function (error) {
                 if (error instanceof uhst.InvalidHostId || error instanceof uhst.InvalidClientOrHostId) {
                     clientStatusEl.innerText += "Cannot resolve " + hostIdToPing + ": Invalid HostId.\n";
@@ -133,14 +143,12 @@
                 clientStatusEl.innerText += sizeOf(message) + " bytes from " + message.src + ": seq=" + message.seq + " time=" + latency + " ms\n";
                 if (message.seq + 1 == MAX_PINGS) {
                     // last message, disconnect
-                    client.disconnect();
+                    client.close();
                 }
             });
             client.on("open", function () {
                 hostStatusEl.innerText += "Client connection established.\n";
-                for (var i = 0; i < MAX_PINGS; i++) {
-                    client.send(JSON.stringify({ "src": host.hostId, "seq": i, "time": Date.now() }));
-                }
+                sendMessage();
             });
             client.on("close", function () {
                 hostStatusEl.innerText += "Client connection closed.\n";
